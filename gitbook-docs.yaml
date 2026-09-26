@@ -1,6 +1,6 @@
 $schema: https://api.gitbook.com/gitbook-docs.yaml
 site:
-  title: vgui-framework
+  title: docs
   structure:
     - type: space
       key: vgui-docs
