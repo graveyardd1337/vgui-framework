@@ -128,10 +128,10 @@ For separate desktop windows, create an HWND and context for each.
 
 ## Complete settings menu
 
-[settings.hpp](../examples/settings.hpp) holds application state;
-[settings.cpp](../examples/settings.cpp) implements `show_settings(ui, settings)`.
+[settings.hpp](https://github.com/graveyardd1337/vgui-framework/blob/main/examples/settings.hpp) holds application state;
+[settings.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/examples/settings.cpp) implements `show_settings(ui, settings)`.
 Call it inside a successful frame, without another window open. CTest checks
 submission of each settings tab.
 
-[demo/main.cpp](../demo/main.cpp) is a standalone old-Steam-style demo with a game
+[demo/main.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/demo/main.cpp) is a standalone old-Steam-style demo with a game
 list and simulated pre-loading. It also serves as the DLL client example.

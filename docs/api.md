@@ -1,6 +1,6 @@
 # API reference
 
-[Documentation](README.md) · [Public header](../include/vgui.hpp)
+[Documentation](README.md) · [Public header](https://github.com/graveyardd1337/vgui-framework/blob/main/include/vgui.hpp)
 
 All methods below belong to `vgui::Context`. Submit layout and widgets between a
 successful `begin_frame()` and its matching `end_frame()`.

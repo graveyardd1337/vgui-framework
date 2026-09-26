@@ -101,7 +101,7 @@ Win32 processing and application shutdown remain the caller's responsibility.
 Drain Win32 messages before submitting UI. Call `TranslateMessage` before
 `DispatchMessageW` to generate `WM_CHAR` for text input. If all contexts return false
 from `begin_frame()`, the application can use `WaitMessage()`.
-See [demo/main.cpp](../demo/main.cpp) for the complete loop and cleanup.
+See [demo/main.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/demo/main.cpp) for the complete loop and cleanup.
 
 The context owns its device, swap chain and render target. It handles resize in
 `begin_frame()`, then clears, draws and presents in `end_frame()`. If hardware D3D11

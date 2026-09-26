@@ -1,0 +1,12 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+site:
+  title: vgui-framework
+  structure:
+    - type: space
+      key: vgui-docs
+      title: Documentation
+      path: docs
+      default: true
+      content:
+        directory: ./docs
+        language: en

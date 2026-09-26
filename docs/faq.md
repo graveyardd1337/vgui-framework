@@ -79,7 +79,7 @@ files or save window positions between runs. Save your own state as needed.
 There is no automatic DPI scaling, docking, general-purpose list virtualization,
 device-lost recovery or accessibility integration. Text and list APIs are intended
 for modest data sets. Caret and scroll metadata stay until the Context is destroyed,
-so avoid generating new IDs every frame. Planned widgets are in [TODO.md](../TODO.md).
+so avoid generating new IDs every frame. Planned widgets are in [TODO.md](https://github.com/graveyardd1337/vgui-framework/blob/main/TODO.md).
 
 ### How do I check changes?
 

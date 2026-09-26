@@ -32,8 +32,8 @@ if (ui.begin_frame()) {
 }
 ```
 
-[demo/main.cpp](../demo/main.cpp) is a complete desktop application.
-[examples/settings.cpp](../examples/settings.cpp) shows a small settings menu
+[demo/main.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/demo/main.cpp) is a complete desktop application.
+[examples/settings.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/examples/settings.cpp) shows a small settings menu
 that is also compiled and exercised by the tests.
 
 ## Basic rules
@@ -47,5 +47,5 @@ that is also compiled and exercised by the tests.
 - Coordinates are client pixels. DPI scaling is not automatic.
 - Buttons return true on activation; value controls return true when their value changes.
 
-The API is still evolving. See [vgui.hpp](../include/vgui.hpp) for public declarations;
-headers in `src/` are private. Planned widgets are listed in [TODO.md](../TODO.md).
+The API is still evolving. See [vgui.hpp](https://github.com/graveyardd1337/vgui-framework/blob/main/include/vgui.hpp) for public declarations;
+headers in `src/` are private. Planned widgets are listed in [TODO.md](https://github.com/graveyardd1337/vgui-framework/blob/main/TODO.md).
