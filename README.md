@@ -1,5 +1,9 @@
 # vgui-framework
 
+[![Documentation](https://img.shields.io/badge/Documentation-4c5844?style=for-the-badge)](https://vgui-framework.gitbook.io/docs)
+[![TODO](https://img.shields.io/badge/TODO-657050?style=for-the-badge)](https://github.com/graveyardd1337/vgui-framework/blob/main/TODO.md)
+[![Release](https://img.shields.io/badge/Release-877d37?style=for-the-badge)](https://github.com/graveyardd1337/vgui-framework/releases)
+
 A small C++17 / DirectX 11 GUI library inspired by the olive interfaces in classic Steam and Counter-Strike 1.6. It has its own renderer, input handling and widgets. No Dear ImGui dependency and no Valve source code.
 
 The demo has two separate desktop windows: a game list and a simulated pre-load dialog.
@@ -243,7 +247,8 @@ ASCII text, no automatic DPI scaling, docking, arbitrary scrollable panels, acce
 
 The renderer still owns its device and swap chain. Building it as a DLL does not turn it into a backend for an existing game's render loop. External D3D devices, GPU state preservation and rendering into a caller-provided target would need a separate integration layer.
 
-See [docs](docs/README.md) for the API reference, examples, architecture notes and FAQ.
+Read the [documentation on GitBook](https://vgui-framework.gitbook.io/docs) for the
+API reference, examples, architecture notes and FAQ. Markdown sources are in [docs](docs/README.md).
 Public declarations are in [vgui.hpp](include/vgui.hpp).
 
 ## License

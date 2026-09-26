@@ -1,6 +1,6 @@
-# Planned widgets
+# TODO
 
-Saved for later; these are not implemented yet.
+Planned widgets. Unchecked items are not implemented yet.
 
 - [ ] ColorPicker
 - [ ] InputInt / InputFloat
