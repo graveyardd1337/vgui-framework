@@ -8,6 +8,10 @@ A small C++17 / DirectX 11 GUI library inspired by the olive interfaces in class
 
 The demo has two separate desktop windows: a game list and a simulated pre-load dialog.
 
+## Preview
+
+![vgui-framework demo](docs/preview.jpg)
+
 ## Requirements
 
 - Windows with DirectX 11 support.
