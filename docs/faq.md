@@ -27,16 +27,11 @@ Use `last_item().focused` if you want to draw your own focus indicator.
 
 ### Does it support Cyrillic or other Unicode text?
 
-Not yet. The atlas contains printable ASCII; other bytes render as `?`. TextEntry
-accepts ASCII through WM_CHAR. Unicode, IME, text selection, clipboard and undo
-are not implemented.
+Yes. Text uses UTF-8, glyphs are rasterized on demand through GDI, and TextEntry converts WM_CHAR surrogate pairs to UTF-8. Selection and Ctrl+A/C/V/X are supported. Font coverage determines glyph availability. Complex-script shaping, grapheme-cluster editing, IME and undo are not implemented.
 
 ### Can it use an existing game's DirectX 11 renderer?
 
-The current Context owns its device, device context and swap chain, clears its
-render target and presents. It is designed for standalone windows. An existing
-renderer would need an integration layer that accepts external GPU objects and
-preserves the caller's rendering state.
+Yes. Use `Context(hwnd, device, immediate_context)`, `begin_frame(width, height)` and `end_frame(rtv)`. The library restores the host pipeline state and leaves clearing, resizing and Present to the host. See [external rendering](external-rendering.md). The application must integrate those calls into its render loop.
 
 ### Does loading the DLL create the interface automatically?
 
@@ -49,19 +44,25 @@ the executable and use compatible MSVC/STL, runtime and architecture settings.
 Create an HWND sized for your UI, call `set_borderless(true)` outside a frame, and
 use `WindowMode::Native` in `begin_window()`. The VGUI frame then fills the HWND and
 its title bar moves the desktop window. The demo does this by default; `--framed`
-keeps the normal Windows border. Custom minimize/maximize buttons and borderless
-resize handles are not implemented.
+keeps the normal Windows border. Forward messages through `window_message()` for edge/corner resizing. `set_resizable(false)` disables it. Custom minimize/maximize buttons are not provided.
 
 ### Can I use multiple windows or threads?
 
 Yes, with one Context per HWND. Use each context on its window's UI thread; several
-windows can share that thread. A single Context is not thread-safe. Inside one HWND,
-avoid overlapping root panels because window z-order/focus management is incomplete.
+windows can share that thread. A single Context is not thread-safe. Inside one HWND, root panels/windows maintain z-order and only the frontmost root under the pointer receives mouse input. Child containers inherit their root's order; independently floating surfaces should be separate roots.
 
 ### Why does ScrollBar not scroll the whole document?
 
 ScrollBar changes a numeric `position`. The application chooses which document rows
-to draw. Listbox and Multibox scroll their own contents; arbitrary Panels do not.
+to draw. For automatic content scrolling use `begin_scroll_panel()` / `end_scroll_panel()`. The panel measures its submitted content, clips it and adds a scrollbar when needed. Listbox and Multibox also scroll their own contents.
+
+### How does DPI scaling work?
+
+Enable per-monitor DPI awareness before creating windows and forward messages through `window_message()`. Layout coordinates are logical pixels at 96 DPI. Fonts, geometry and input follow the window's DPI. Call `set_dpi_scale(1.5f)` for an override or zero for automatic mode, between frames. Explicit external target dimensions are always physical pixels.
+
+### What happens after device removal?
+
+Standalone mode attempts to rebuild GPU resources on the next frame. External mode returns false from `begin_frame()` until the host reconnects a replacement device through `reset_device(device, context)`. Recreate application-owned image textures on the replacement device too. Explicit reset/reconnection is tested; an actual driver crash is not forced by the tests.
 
 ### How do I change the number of progress blocks?
 
@@ -76,10 +77,9 @@ files or save window positions between runs. Save your own state as needed.
 
 ### What else is missing?
 
-There is no automatic DPI scaling, docking, general-purpose list virtualization,
-device-lost recovery or accessibility integration. Text and list APIs are intended
+There is no docking, general-purpose list virtualization or accessibility integration. Text and list APIs are intended
 for modest data sets. Caret and scroll metadata stay until the Context is destroyed,
-so avoid generating new IDs every frame. Planned widgets are in [TODO.md](https://github.com/graveyardd1337/vgui-framework/blob/main/TODO.md).
+so avoid generating new IDs every frame. Planned widgets are in [TODO.md](https://github.com/insomfaze/vgui-framework/blob/main/TODO.md).
 
 ### How do I check changes?
 

@@ -58,8 +58,32 @@ ui.end_window();
 ```
 
 Panels are positioned relative to the parent, not the layout cursor. Give the parent
-enough room for both panels. Panels do not scroll automatically; use Listbox or
-Multibox for scrollable lists.
+enough room for both panels. Use `begin_scroll_panel()` when content needs automatic scrolling:
+
+```cpp
+ui.begin_scroll_panel("Options", {12, 40, 260, 220});
+for (int i = 0; i < 40; ++i) {
+    ui.push_id(i);
+    ui.button("test");
+    ui.tooltip("Help for this row");
+    ui.pop_id();
+}
+ui.end_scroll_panel();
+```
+
+The panel measures the submitted content and adds a scrollbar. Keep the content submitted each frame; clipping does not provide list virtualization.
+
+## UTF-8 and images
+
+```cpp
+// C++17: UTF-8 literal stored in application state.
+std::string name = u8"\u041f\u0440\u0438\u0432\u0435\u0442";
+ui.text_entry("Name", name, 256); // Byte limit for new input.
+ui.tooltip("Drag to select; Ctrl+A/C/V/X are available.");
+ui.image(icon_srv, 32, 32); // Texture2D SRV from ui.device().
+```
+
+Create the image outside the UI loop and recreate it after replacing the device. See [external rendering](external-rendering.md) for ownership rules. `demo/features.cpp` has a complete texture creation and reset example.
 
 ## Lists and multiple selection
 
@@ -128,10 +152,10 @@ For separate desktop windows, create an HWND and context for each.
 
 ## Complete settings menu
 
-[settings.hpp](https://github.com/graveyardd1337/vgui-framework/blob/main/examples/settings.hpp) holds application state;
-[settings.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/examples/settings.cpp) implements `show_settings(ui, settings)`.
+[settings.hpp](https://github.com/insomfaze/vgui-framework/blob/main/examples/settings.hpp) holds application state;
+[settings.cpp](https://github.com/insomfaze/vgui-framework/blob/main/examples/settings.cpp) implements `show_settings(ui, settings)`.
 Call it inside a successful frame, without another window open. CTest checks
 submission of each settings tab.
 
-[demo/main.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/demo/main.cpp) is a standalone old-Steam-style demo with a game
+[demo/main.cpp](https://github.com/insomfaze/vgui-framework/blob/main/demo/main.cpp) is a standalone old-Steam-style demo with a game
 list and simulated pre-loading. It also serves as the DLL client example.

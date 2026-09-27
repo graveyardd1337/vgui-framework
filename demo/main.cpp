@@ -6,8 +6,9 @@
 
 LRESULT CALLBACK window_proc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
     auto* ui = reinterpret_cast<vgui::Context*>(GetWindowLongPtrW(window, GWLP_USERDATA));
-    if (ui)
-        ui->message(msg, wp, lp);
+    LRESULT result = 0;
+    if (ui && ui->window_message(msg, wp, lp, result))
+        return result;
     if (msg == WM_CLOSE) {
         PostQuitMessage(0);
         return 0;
@@ -21,7 +22,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR arguments, int show) {
     const std::wstring args(arguments);
     const bool smoke = args.find(L"--smoke") != std::wstring::npos;
     const bool framed = args.find(L"--framed") != std::wstring::npos;
-    SetProcessDPIAware();
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASSW wc{};
     wc.hInstance = instance;
     wc.lpfnWndProc = window_proc;
@@ -154,8 +155,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR arguments, int show) {
             }
             if (smoke && ++frames == 3)
                 break;
-            if (!drew)
-                WaitMessage();
+            if (!drew) {
+                if (downloadUi.device_lost() || gamesUi.device_lost())
+                    Sleep(16);
+                else
+                    WaitMessage();
+            }
         }
         SetWindowLongPtrW(downloadWindow, GWLP_USERDATA, 0);
         SetWindowLongPtrW(gamesWindow, GWLP_USERDATA, 0);

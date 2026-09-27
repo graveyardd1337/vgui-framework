@@ -20,6 +20,7 @@ Rect Context::Impl::row(float height) {
     lastBounds = bounds;
     hasItem = true;
     lastItem = {bounds, hit(bounds), false, false};
+    lastKey = panelId + "/row/" + std::to_string(bounds.y);
     return bounds;
 }
 
@@ -35,22 +36,35 @@ void Context::Impl::record_item(const std::string& key, Rect bounds) {
         return item == key || item.compare(0, key.size() + 1, key + "/") == 0;
     };
     lastItem = {bounds, hit(bounds), belongs(activeId), belongs(focusedId)};
+    lastKey = key;
 }
 
 bool Context::Impl::hit(Rect r) {
-    return (openPopup.empty() || inPopup) && contains(r, mouseX, mouseY) &&
-           contains(render.clip, mouseX, mouseY);
+    return (inPopup || rootId == pointerRoot) && (openPopup.empty() || inPopup) &&
+           contains(r, mouseX, mouseY) && contains(render.clip, mouseX, mouseY);
 }
 
 bool Context::Impl::interact(const std::string& key, Rect r) {
-    tabOrder.push_back(key);
+    if (rootId == focusRoot)
+        tabOrder.push_back(key);
     if (mousePressed && hit(r) && activeId.empty()) {
         activeId = key;
         focusedId = key;
     }
     record_item(key, r);
     return (mouseReleased && activeId == key && hit(r)) ||
-           (focusedId == key && activatePressed && (openPopup.empty() || inPopup));
+           (focusedId == key && activatePressed && keyboard());
+}
+
+void Context::Impl::open_root(const std::string& id, Rect bounds) {
+    rootId = id;
+    if (roots.find(id) == roots.end()) {
+        zOrder.push_back(id);
+        if (focusRoot.empty())
+            focusRoot = id;
+    }
+    roots[id] = {bounds, true};
+    render.layer = static_cast<int>(std::find(zOrder.begin(), zOrder.end(), id) - zOrder.begin());
 }
 
 Rect Context::Impl::intersect(Rect a, Rect b) {
@@ -76,6 +90,7 @@ void Context::begin_window(std::string_view title, Rect& bounds, WindowMode mode
         bounds.h = std::max(bounds.h, 80.f);
     }
     state.panelId = std::to_string(title.size()) + ":" + std::string(title);
+    state.open_root(state.panelId, bounds);
     auto drag = state.id("@drag");
     Rect bar{bounds.x, bounds.y, bounds.w, 27};
     if (state.mousePressed && state.hit(bar) && state.activeId.empty()) {
@@ -99,6 +114,7 @@ void Context::begin_window(std::string_view title, Rect& bounds, WindowMode mode
     bounds.x = std::clamp(bounds.x, 0.f, std::max(0.f, state.render.width - bounds.w));
     bounds.y = std::clamp(bounds.y, 0.f, std::max(0.f, state.render.height - 27.f));
     state.panel = bounds;
+    state.roots[state.rootId].bounds = bounds;
     state.inPanel = true;
     state.render.quad({bounds.x + 4, bounds.y + 4, bounds.w, bounds.h}, {0, 0, 0, 85});
     state.render.quad(bounds, theme.panel);
@@ -108,6 +124,7 @@ void Context::begin_window(std::string_view title, Rect& bounds, WindowMode mode
     state.render.quad({bounds.x + 8, bounds.y + 27, bounds.w - 16, 1}, theme.shadow);
     state.render.clip = {bounds.x + 2, bounds.y + 29, bounds.w - 4, bounds.h - 31};
     state.cursorY = bounds.y + 39;
+    state.scrolling = false;
 }
 
 void Context::end_window() {
@@ -121,12 +138,21 @@ void Context::begin_panel(std::string_view title, Rect bounds) {
     state.require_frame();
     if (state.inPanel) {
         state.layouts.push_back({state.panel, state.render.clip, state.cursorY, state.panelId,
-                                 state.lastBounds, state.hasItem, state.panelIdDepth});
+                                 state.lastBounds, state.hasItem, state.panelIdDepth,
+                                 state.scrolling, state.scrollBounds, state.scrollStart});
         bounds.x += state.panel.x;
         bounds.y += state.panel.y;
+        if (state.scrolling) {
+            bounds.y -= state.scrollPanels[state.panelId].offset;
+            state.layouts.back().cursorY =
+                std::max(state.cursorY, bounds.y + bounds.h + style.item_spacing);
+        }
         state.panelId += "/" + std::to_string(title.size()) + ":" + std::string(title);
-    } else
+    } else {
         state.panelId = std::to_string(title.size()) + ":" + std::string(title);
+        state.open_root(state.panelId, bounds);
+    }
+    state.scrolling = false;
     state.panelIdDepth = state.idStack.size();
     state.hasItem = false;
     state.inlineNext = false;
@@ -149,6 +175,8 @@ void Context::end_panel() {
     auto& state = *impl;
     if (!state.inPanel)
         throw std::logic_error("No panel open");
+    if (state.scrolling)
+        throw std::logic_error("Use end_scroll_panel for a scrollable panel");
     if (state.idStack.size() != state.panelIdDepth)
         throw std::logic_error("Balance push_id/pop_id before closing a container");
     state.inlineNext = false;
@@ -163,12 +191,61 @@ void Context::end_panel() {
         state.lastBounds = parent.lastBounds;
         state.hasItem = parent.hasItem;
         state.panelIdDepth = parent.idDepth;
+        state.scrolling = parent.scrolling;
+        state.scrollBounds = parent.scrollBounds;
+        state.scrollStart = parent.scrollStart;
     } else {
         state.inPanel = false;
         state.hasItem = false;
         state.render.clip = {0, 0, static_cast<float>(state.render.width),
                              static_cast<float>(state.render.height)};
     }
+}
+
+void Context::begin_scroll_panel(std::string_view title, Rect bounds) {
+    begin_panel(title, bounds);
+    auto& s = *impl;
+    s.scrolling = true;
+    s.scrollBounds = s.panel;
+    s.scrollStart = s.cursorY;
+    auto& scroll = s.scrollPanels[s.panelId];
+    scroll.viewport = s.render.clip;
+    scroll.depth = s.layouts.size();
+    scroll.root = s.rootId;
+    scroll.seen = true;
+    float visible = std::max(0.f, s.scrollBounds.y + s.scrollBounds.h - 2 - s.scrollStart);
+    if (s.wheel && s.wheelPanel == s.panelId && s.openPopup.empty()) {
+        scroll.offset -= s.wheel * 44.f;
+        s.wheel = 0;
+    }
+    scroll.offset = std::clamp(scroll.offset, 0.f, std::max(0.f, scroll.contentHeight - visible));
+    s.cursorY -= scroll.offset;
+    // Reserve the gutter from the first frame so content width doesn't jump.
+    s.panel.w = std::max(1.f, s.panel.w - 20);
+    s.render.clip = s.intersect(s.render.clip, {s.panel.x, s.panel.y, s.panel.w, s.panel.h});
+}
+void Context::end_scroll_panel() {
+    auto& s = *impl;
+    if (!s.scrolling)
+        throw std::logic_error("No scrollable panel open");
+    auto& scroll = s.scrollPanels[s.panelId];
+    scroll.contentHeight = std::max(0.f, s.cursorY + scroll.offset - s.scrollStart);
+    float visible = std::max(0.f, s.scrollBounds.y + s.scrollBounds.h - 2 - s.scrollStart);
+    scroll.offset = std::clamp(scroll.offset, 0.f, std::max(0.f, scroll.contentHeight - visible));
+    s.render.clip = scroll.viewport;
+    if (scroll.contentHeight > visible && visible >= 36) {
+        int position = static_cast<int>(scroll.offset);
+        int savedWheel = s.wheel;
+        s.wheel = 0;
+        s.scrollbar(s.panelId + "/@scroll",
+                    {s.scrollBounds.x + s.scrollBounds.w - 20, s.scrollStart, 18, visible},
+                    position, static_cast<int>(std::ceil(scroll.contentHeight)),
+                    static_cast<int>(visible));
+        s.wheel = savedWheel;
+        scroll.offset = static_cast<float>(position);
+    }
+    s.scrolling = false;
+    end_panel();
 }
 
 void Context::set_next_item_width(float width) {

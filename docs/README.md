@@ -10,6 +10,7 @@ The library has no ImGui dependency and uses no Valve source code.
 3. [Examples](examples.md): tabs, IDs, layout and themes.
 4. [Architecture](architecture.md): rendering, input and widget implementation.
 5. [FAQ](faq.md): common mistakes and current limits.
+6. [External rendering](external-rendering.md): host devices, render targets, images and recovery.
 
 ## Quick example
 
@@ -32,20 +33,21 @@ if (ui.begin_frame()) {
 }
 ```
 
-[demo/main.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/demo/main.cpp) is a complete desktop application.
-[examples/settings.cpp](https://github.com/graveyardd1337/vgui-framework/blob/main/examples/settings.cpp) shows a small settings menu
+[demo/main.cpp](https://github.com/insomfaze/vgui-framework/blob/main/demo/main.cpp) is a complete desktop application.
+[examples/settings.cpp](https://github.com/insomfaze/vgui-framework/blob/main/examples/settings.cpp) shows a small settings menu
 that is also compiled and exercised by the tests.
 
 ## Basic rules
 
 - Use one `Context` per HWND, on the window's UI thread.
-- Forward WndProc input to `message()` before submitting the next frame.
+- Forward WndProc messages to `window_message()` and return its result when handled.
 - If `begin_frame()` returns false, skip UI submission and `end_frame()`.
 - Balance all begin/end and push/pop calls.
 - Widget data belongs to the caller. References to that data are not kept between frames.
 - Keep labels stable. `test##audio` displays `test` but uses the full label as its ID.
-- Coordinates are client pixels. DPI scaling is not automatic.
+- Coordinates are logical pixels at 96 DPI; automatic scaling follows the window DPI.
+- Text is UTF-8. Enable per-monitor DPI awareness before creating windows.
 - Buttons return true on activation; value controls return true when their value changes.
 
-The API is still evolving. See [vgui.hpp](https://github.com/graveyardd1337/vgui-framework/blob/main/include/vgui.hpp) for public declarations;
-headers in `src/` are private. Planned widgets are listed in [TODO.md](https://github.com/graveyardd1337/vgui-framework/blob/main/TODO.md).
+The API is still evolving. See [vgui.hpp](https://github.com/insomfaze/vgui-framework/blob/main/include/vgui.hpp) for public declarations;
+headers in `src/` are private. Planned widgets are listed in [TODO.md](https://github.com/insomfaze/vgui-framework/blob/main/TODO.md).

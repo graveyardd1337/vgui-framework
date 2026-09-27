@@ -26,6 +26,9 @@ add_library(vgui-framework ${VGUI_LIBRARY_TYPE}
   src/layout.cpp
   src/render.cpp
   src/widgets.cpp
+  src/text.cpp
+  src/text_entry.cpp
+  src/extras.cpp
 )
 add_library(vgui::vgui ALIAS vgui-framework)
 if(VGUI_BUILD_SHARED)
@@ -40,6 +43,8 @@ if(MSVC)
 endif()
 add_executable(vgui_demo WIN32 demo/main.cpp)
 target_link_libraries(vgui_demo PRIVATE vgui-framework)
+add_executable(vgui_features WIN32 demo/features.cpp)
+target_link_libraries(vgui_features PRIVATE vgui::vgui)
 include(CTest)
 if(BUILD_TESTING)
   add_executable(vgui_interaction_tests tests/interaction.cpp)
@@ -48,6 +53,10 @@ if(BUILD_TESTING)
   add_executable(vgui_api_tests tests/api.cpp examples/settings.cpp)
   target_link_libraries(vgui_api_tests PRIVATE vgui::vgui)
   add_test(NAME public_api COMMAND vgui_api_tests)
+  add_executable(vgui_feature_tests tests/features.cpp)
+  target_link_libraries(vgui_feature_tests PRIVATE vgui::vgui)
+  add_test(NAME framework_features COMMAND vgui_feature_tests)
   add_test(NAME demo_smoke COMMAND vgui_demo --smoke)
   add_test(NAME demo_framed_smoke COMMAND vgui_demo --smoke --framed)
+  add_test(NAME features_smoke COMMAND vgui_features --smoke)
 endif()

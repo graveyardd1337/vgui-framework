@@ -11,21 +11,27 @@
 | `src/input.cpp` | Win32 messages, mouse capture, character input and per-frame input reset. |
 | `src/layout.cpp` | Windows, panels, clipping, rows, IDs and hit testing. |
 | `src/widgets.cpp` | Widget rendering and interaction, lists and combo menus. |
+| `src/text.cpp`, `src/text.hpp` | UTF-8 decoding, character boundaries and UTF-16 conversion. |
+| `src/text_entry.cpp` | Single-line editing, selection, clipboard and caret scrolling. |
+| `src/extras.cpp` | Images and hover tooltips. |
 | `src/render.hpp` | Private DX11 Renderer declaration. |
 | `src/render.cpp` | Device/swap chain, shaders, font atlas, geometry and Present. |
 | `src/internal.hpp` | Private interaction and layout state in Context::Impl. |
 | `demo/main.cpp` | Desktop demo with a pre-load dialog and game list. |
+| `demo/features.cpp` | Interactive feature gallery. |
 | `examples/settings.*` | Settings menu using the public API. |
 | `tests/interaction.cpp` | Mouse and keyboard interaction checks. |
 | `tests/api.cpp` | Layout, IDs, item state, scope balance, native windows and progress checks. |
+| `tests/features.cpp` | External rendering, Unicode, clipboard, DPI, resize, reset, z-order and scrolling. |
 
 ## Frame flow
 
 ```text
-Win32 WndProc -> Context::message -> accumulated input
-begin_frame  -> resize + clear draw buffers + move focus
+Win32 WndProc -> Context::window_message -> native handling + accumulated input
+begin_frame  -> device check + DPI + resize + clear draw buffers + focus
 widgets      -> layout + ID + interaction -> renderer geometry
-end_frame    -> append overlay -> upload -> Draw -> Present
+end_frame    -> layer sort -> state swap -> upload -> texture batches -> restore state
+standalone   -> Present (external mode leaves this to the host)
 ```
 
 The application owns checkbox, slider, text and list values. The context keeps
@@ -36,19 +42,18 @@ and layout. A widget that is not submitted is not drawn that frame.
 `bevel` methods rather than D3D11 directly. The public header exposes Win32 types
 for integration but does not include D3D11 headers.
 
-Each context owns a device and swap chain. Native mode fills its HWND; panel mode
-places movable VGUI frames within that HWND. The demo uses two contexts and HWNDs
-for independent desktop windows.
+Standalone contexts own a device and swap chain. External contexts retain a supplied device and immediate context and draw into a supplied RTV. Native mode fills its HWND; panel mode places movable VGUI frames within that HWND. Root draw order and pointer routing follow persistent z-order. Activating an exposed root raises it. Child panels inherit the root layer and use submission order within that layer.
 
 ## Rendering
 
-A Tahoma atlas is created once through GDI. An opaque white texel in the same atlas
-is used for rectangles, so text and geometry share a texture and shader.
+Tahoma glyphs are rasterized on demand through GDI into 2048-square atlas pages. UTF-8 codepoints map to glyph records; an opaque white texel draws solid rectangles. DPI changes rebuild the atlas at the requested scale. Widget coordinates and input stay in logical pixels, while the D3D viewport uses physical target dimensions.
 
 Clipping happens when building quads: positions and UVs are clipped together.
 Checkmarks and arrows use pixel geometry rather than font glyphs. Combo menus put
 their vertices in a separate overlay buffer that is appended after the normal UI.
-A non-empty frame uses one Draw call. An empty frame only clears and presents.
+Vertices are stably sorted by layer and batched by adjacent texture use. Images and additional font pages can introduce more Draw calls. Tooltips use a layer above combo menus. External drawing swaps the complete D3D11.1 context state and restores it afterward; saved UI state releases host target and image bindings. Standalone mode also clears and presents its own target.
+
+Device removal is checked at frame boundaries and on GPU failures. Standalone mode attempts a full resource rebuild; external mode requires the host to reconnect replacement objects. CPU widget values are independent of GPU resources. Application image textures must be recreated too.
 
 ## Adding a widget
 
@@ -66,7 +71,7 @@ The demo uses the same API in either configuration.
 
 The DLL is a C++ library with standard-library types in its interface. Clients need
 compatible compiler, STL and runtime settings. It does not provide a stable C ABI
-or an automatic integration layer for an existing renderer.
+or automatic hooks. External renderer integration is explicit through the public constructor and frame calls.
 
 ## Style and checks
 
@@ -79,7 +84,4 @@ Get-ChildItem include, src, demo, tests, examples -Recurse -File |
     ForEach-Object { clang-format -i $_.FullName }
 ```
 
-`build.ps1` runs four CTest checks: widget interactions, public API behavior, and
-three-frame demo startup/render checks with and without Windows borders. Tests
-use real DX11 contexts with hidden windows. Both static and DLL builds run the
-same checks.
+`build.ps1` runs six CTest checks: widget interactions, public API behavior, feature regressions, and three startup/render smoke tests. Feature tests use WARP targets for pixel readback, verify selected host-state bindings and backbuffer release, and exercise resource replacement. Both static and DLL builds run the same checks. No test forces a driver timeout or physical display change.

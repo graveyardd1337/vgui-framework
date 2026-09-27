@@ -1,6 +1,6 @@
 # API reference
 
-[Documentation](README.md) · [Public header](https://github.com/graveyardd1337/vgui-framework/blob/main/include/vgui.hpp)
+[Documentation](README.md) · [Public header](https://github.com/insomfaze/vgui-framework/blob/main/include/vgui.hpp)
 
 All methods below belong to `vgui::Context`. Submit layout and widgets between a
 successful `begin_frame()` and its matching `end_frame()`.
@@ -10,12 +10,25 @@ successful `begin_frame()` and its matching `end_frame()`.
 | Call | Behavior |
 | --- | --- |
 | `Context(HWND window)` | Creates a DX11 renderer for an existing window. Not copyable or movable. |
+| `Context(HWND, ID3D11Device*, ID3D11DeviceContext*)` | Uses a supplied device and immediate context; holds COM references. No owned swap chain. |
 | `message(UINT, WPARAM, LPARAM)` | Processes input from WndProc. Does not return whether a message was consumed. |
+| `bool window_message(UINT, WPARAM, LPARAM, LRESULT&)` | Forwards input and handles DPI/borderless native messages. If true, return the supplied result from WndProc. Do not also call `message()` for that message. |
 | `bool begin_frame()` | Starts a frame, handles resize and Tab navigation. Returns false for minimized or zero-sized windows. |
 | `end_frame()` | Checks scope balance, draws and presents. |
+| `bool begin_frame(unsigned width, unsigned height)` | External mode only: physical target dimensions. Returns false for zero size or device loss. |
+| `end_frame(ID3D11RenderTargetView*)` | External mode only: draws without clearing or presenting, then restores the host pipeline state. |
+| `set_dpi_scale(float)` | Between frames: zero selects window DPI; an explicit scale must be 0.5 through 8. |
+| `float dpi_scale() const` | Scale applied by the most recent successful begin_frame. |
+| `bool device_lost() const` | True if the renderer is unavailable or the device was removed. |
+| `ID3D11Device* device() const` | Borrowed device pointer for creating textures. Reacquire after reset. |
+| `reset_device()` | Recreates standalone GPU resources between frames. |
+| `reset_device(ID3D11Device*, ID3D11DeviceContext*)` | Reconnects external mode to a matching device and immediate context between frames. |
 | `set_borderless(bool)` | Removes or restores the native window frame. Call outside a frame. |
+| `set_resizable(bool, float min_width = 180, float min_height = 80)` | Enables borderless edge/corner resizing with logical minimum dimensions. Call outside a frame. |
 | `set_vsync(bool)` | VSync is on by default. Disabling it does not enable the DXGI tearing flag. |
 | `FrameStats frame_stats() const` | Vertex and draw-call counts for the last completed frame; zero before the first frame. |
+
+All layout dimensions and item rectangles are logical pixels at 96 DPI. Target dimensions are physical pixels. Enable per-monitor DPI awareness before creating windows. Text is UTF-8. External mode ignores VSync; the host owns presentation. See [external rendering](external-rendering.md) for ownership and recovery.
 
 ## Windows and panels
 
@@ -42,7 +55,18 @@ other panels. `end_panel()` restores the parent's layout. Panels are positioned
 explicitly and do not consume an automatic layout row. A root panel is also allowed.
 
 Each begin needs a matching end in the same frame. Close child panels before
-`end_window()`. Overlapping panels within one HWND have no complete z-order manager.
+`end_window()`. Root panels/windows have persistent z-order: clicking an exposed root raises it, and only the topmost root under the pointer receives mouse input. Keyboard focus follows activation. Child panels inherit the root layer and draw in submission order; use separate roots for independently floating surfaces. Hit testing uses the previous completed frame's root bounds.
+
+## Scrollable panels
+
+```cpp
+void begin_scroll_panel(std::string_view title, Rect bounds);
+void end_scroll_panel();
+```
+
+Uses the same coordinates as `begin_panel()`. Rows and nested panels move with the scroll offset and are clipped to the viewport. Content height is measured during submission; a scrollbar appears when needed. A 20-pixel gutter is reserved to avoid width changes. Use a panel height of at least 80 for usable scrollbar controls. The mouse wheel moves by 44 logical pixels per notch and goes to the deepest hovered scroll panel. Lists inside a scroll panel have their own scrollbar controls; panel wheel input scrolls the enclosing panel.
+
+Keep submitting the content each frame; this API does not virtualize large lists. A new content height becomes available after `end_scroll_panel()`, so adding/removing content may settle the offset on the following frame. Explicitly positioned child panels extend the measured content height. Close with `end_scroll_panel()`, not `end_panel()`.
 
 ## Basic widgets
 
@@ -114,12 +138,23 @@ bool text_entry(std::string_view label, std::string& value,
                 size_t max_length = 256);
 ```
 
-A single-line ASCII editor. Returns true when the string changes. Supports clicking
-to place the caret, Left/Right, Home/End and Backspace/Delete. Escape clears focus
-without reverting edits. Long text scrolls to keep the caret visible.
+A single-line UTF-8 editor. Returns true when the string changes. Click to place the caret, drag to select, or use Shift+Left/Right/Home/End. Ctrl+A selects all, Ctrl+C copies, Ctrl+X cuts and Ctrl+V pastes through the Windows Unicode clipboard. Left/Right, Home/End and Backspace/Delete work on codepoint boundaries. Escape clears focus without reverting edits. Long text scrolls to keep the caret visible.
 
-`max_length` limits new input; it does not trim existing text. Selection, Ctrl+A,
-clipboard, undo and Unicode/IME are not implemented.
+`max_length` limits new input in bytes; insertion never splits a UTF-8 codepoint and does not trim existing text. Paste replaces newlines and tabs with spaces. Feed WM_CHAR through `TranslateMessage`/`DispatchMessageW`; UTF-16 surrogate pairs are combined before insertion. Malformed UTF-8 renders as replacement characters. Glyph coverage depends on Windows fonts. Grapheme-cluster editing, complex-script shaping, IME, multiline editing and undo are not implemented.
+
+## Tooltip and Image
+
+```cpp
+void tooltip(std::string_view text, float delay = 0.4f);
+void image(ID3D11ShaderResourceView* texture, float width, float height,
+           Rect uv = {0, 0, 1, 1}, Color tint = {255, 255, 255, 255});
+```
+
+Call `tooltip()` immediately after its widget. The delay is in seconds; zero shows it immediately while hovered. It accepts UTF-8 and newlines, draws above the UI and is positioned near the pointer within the target. Moving to another item restarts the delay.
+
+`image()` consumes a layout row. Width and height are positive logical dimensions; available row width may clip the requested width. Supply a Texture2D SRV from `device()` (or the external device). `uv` is normalized x/y/width/height, not two corner coordinates; tint multiplies texture RGBA. The sampler clamps at the texture edges and uses point filtering. Arrays, cubes and multisampled SRVs are rejected. Use a float-sampleable color format such as RGBA8 UNORM.
+
+The caller owns the texture and keeps the SRV valid until the `image()` call. The library retains a COM reference through the draw. Never render to a texture while sampling that same subresource. After a device reset, recreate images on the new device; stale textures are rejected.
 
 ## ScrollBar
 

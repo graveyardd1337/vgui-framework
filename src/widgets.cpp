@@ -19,7 +19,8 @@ void Context::progress_bar(float fraction, int segments) {
 
 void Context::text(std::string_view label) {
     auto& state = *impl;
-    auto bounds = state.row(17);
+    auto bounds =
+        state.row(17.f * (1 + static_cast<int>(std::count(label.begin(), label.end(), '\n'))));
     state.render.label(bounds.x, bounds.y, label, theme.text);
 }
 
@@ -65,7 +66,7 @@ bool Context::slider(std::string_view label, float& value, float minimum, float 
     if (state.activeId == key && (state.mouseDown || state.mouseReleased))
         value = minimum +
                 std::clamp((state.mouseX - track.x) / track.w, 0.f, 1.f) * (maximum - minimum);
-    if (state.focusedId == key && state.arrowX)
+    if (state.focusedId == key && state.keyboard() && state.arrowX)
         value = std::clamp(value + state.arrowX * (maximum - minimum) / 100, minimum, maximum);
     char number[32];
     std::snprintf(number, sizeof(number), "  %.2f", value);
@@ -106,7 +107,8 @@ bool Context::Impl::scrollbar(const std::string& key, Rect bounds, int& position
         std::max(18.f, track.h * std::min(1.f, static_cast<float>(visible) / std::max(1, total))));
     float travel = track.h - thumb;
     Rect handle{track.x, track.y + (maximum ? travel * position / maximum : 0), track.w, thumb};
-    tabOrder.push_back(key);
+    if (rootId == focusRoot)
+        tabOrder.push_back(key);
     if (mousePressed && hit(track) && activeId.empty()) {
         activeId = key;
         focusedId = key;
@@ -122,7 +124,7 @@ bool Context::Impl::scrollbar(const std::string& key, Rect bounds, int& position
     }
     if (hit(bounds) && wheel)
         position -= wheel * 3;
-    if (focusedId == key && (openPopup.empty() || inPopup)) {
+    if (focusedId == key && keyboard()) {
         position += arrowY;
         if (homePressed)
             position = 0;
@@ -179,7 +181,8 @@ bool Context::Impl::list(const std::string& key, Rect bounds, int* selected,
     if (itemCount > visibleRows)
         scrollbar(key + "/scroll", {bounds.x + bounds.w - 20, bounds.y + 2, 18, bounds.h - 4},
                   firstVisible, itemCount, visibleRows);
-    tabOrder.push_back(key);
+    if (rootId == focusRoot)
+        tabOrder.push_back(key);
     if (mousePressed && hovered && activeId.empty()) {
         activeId = key;
         focusedId = key;
@@ -191,7 +194,7 @@ bool Context::Impl::list(const std::string& key, Rect bounds, int* selected,
     cursorIndex = std::clamp(cursorIndex, 0, std::max(0, itemCount - 1));
     if (selected && *selected >= 0)
         cursorIndex = *selected;
-    if (focusedId == key && (openPopup.empty() || inPopup) && itemCount) {
+    if (focusedId == key && keyboard() && itemCount) {
         int oldIndex = cursorIndex;
         cursorIndex = std::clamp(cursorIndex + arrowY, 0, itemCount - 1);
         if (homePressed)
@@ -286,7 +289,7 @@ bool Context::tabs(std::string_view label, int& selected, const std::vector<std:
         auto key = state.id(label) + "/" + std::to_string(i);
         if (state.interact(key, tabRect))
             selected = i;
-        if (state.focusedId == key && state.arrowX && state.openPopup.empty()) {
+        if (state.focusedId == key && state.arrowX && state.keyboard()) {
             selected = std::clamp(i + state.arrowX, 0, itemCount - 1);
             state.focusedId = state.id(label) + "/" + std::to_string(selected);
             state.arrowX = 0;
@@ -304,80 +307,6 @@ bool Context::tabs(std::string_view label, int& selected, const std::vector<std:
     }
     state.record_item(state.id(label), bounds);
     return selected != oldValue;
-}
-
-bool Context::text_entry(std::string_view label, std::string& value, size_t maxLength) {
-    auto& state = *impl;
-    auto bounds = state.row(46);
-    auto key = state.id(label);
-    state.render.label(bounds.x, bounds.y, caption(label), theme.text);
-    Rect field{bounds.x, bounds.y + 20, bounds.w, 26};
-    state.interact(key, field);
-    size_t& caret = state.carets[key];
-    caret = std::min(caret, value.size());
-    bool editing = state.focusedId == key && state.openPopup.empty();
-    std::string oldValue = value;
-    float available = std::max(1.f, field.w - 12);
-    size_t start = 0;
-    if (editing)
-        while (start < caret && state.render.measure(std::string_view(value).substr(
-                                    start, caret - start)) > available)
-            ++start;
-    if (state.mousePressed && state.hit(field)) {
-        caret = start;
-        float x = field.x + 6;
-        while (caret < value.size()) {
-            float w = state.render.measure(std::string_view(value).substr(caret, 1));
-            if (state.mouseX < x + w / 2)
-                break;
-            x += w;
-            ++caret;
-        }
-    }
-    if (editing) {
-        if (state.arrowX < 0 && caret)
-            --caret;
-        if (state.arrowX > 0 && caret < value.size())
-            ++caret;
-        if (state.homePressed)
-            caret = 0;
-        if (state.endPressed)
-            caret = value.size();
-        if (state.deletePressed && caret < value.size())
-            value.erase(caret, 1);
-        for (char c : state.textInput) {
-            if (c == 8) {
-                if (caret)
-                    value.erase(--caret, 1);
-            } else if (value.size() < maxLength) {
-                value.insert(caret, 1, c);
-                ++caret;
-            }
-        }
-        if (state.escapePressed) {
-            state.focusedId.clear();
-            editing = false;
-        }
-    }
-    state.render.quad(field, theme.background);
-    state.render.bevel(field, true);
-    Rect savedClip = state.render.clip;
-    state.render.clip =
-        state.intersect(state.render.clip, {field.x + 5, field.y + 3, field.w - 10, field.h - 6});
-    start = 0;
-    if (editing)
-        while (start < caret && state.render.measure(std::string_view(value).substr(
-                                    start, caret - start)) > available)
-            ++start;
-    state.render.label(field.x + 6, field.y + 6, std::string_view(value).substr(start), theme.text);
-    if (editing && (GetTickCount64() / 500) % 2 == 0)
-        state.render.quad(
-            {field.x + 6 +
-                 state.render.measure(std::string_view(value).substr(start, caret - start)),
-             field.y + 5, 1, 15},
-            theme.text);
-    state.render.clip = savedClip;
-    return value != oldValue;
 }
 
 bool Context::combo_box(std::string_view label, int& selected,
@@ -399,7 +328,8 @@ bool Context::combo_box(std::string_view label, int& selected,
             state.scrolls[key + "/menu"] = std::max(0, selected - 3);
         }
     }
-    if (state.focusedId == key && state.openPopup.empty() && state.arrowY && itemCount)
+    if (state.focusedId == key && state.keyboard() && state.openPopup.empty() && state.arrowY &&
+        itemCount)
         selected = std::clamp(selected + state.arrowY, 0, itemCount - 1);
     state.render.quad(field, theme.background);
     state.render.bevel(field, true);
@@ -426,10 +356,13 @@ bool Context::combo_box(std::string_view label, int& selected,
         state.popupBounds = {field.x, y, field.w, height};
         state.render.clip = {0, 0, static_cast<float>(state.render.width),
                              static_cast<float>(state.render.height)};
+        int savedLayer = state.render.layer;
+        state.render.layer = 1000000;
         state.render.vertices.swap(state.render.overlay);
         state.list(key + "/menu", state.popupBounds, &selected, nullptr, items, visibleRows);
         state.render.vertices.swap(state.render.overlay);
         state.render.clip = savedClip;
+        state.render.layer = savedLayer;
         bool release = state.mouseReleased && state.activeId == key + "/menu" &&
                        contains(state.popupBounds, state.mouseX, state.mouseY);
         bool accept = state.focusedId == key + "/menu" && state.activatePressed;
